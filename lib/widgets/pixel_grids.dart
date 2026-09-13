@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import '../models/habit.dart';
 
 const _monthLetters = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
+const _monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 bool _dayExists(int year, int month, int day) =>
     day <= DateTime(year, month + 1, 0).day;
 
+/// Returns the color for a given level, using the habit's custom LevelConfig list.
 Color pixelColor(Habit habit, int level, ThemeData theme) {
   final empty = theme.brightness == Brightness.dark
       ? const Color(0xFF2B2B30)
@@ -22,7 +24,12 @@ class MonthPixelGrid extends StatelessWidget {
   final int year;
   final void Function(DateTime) onTapDay;
 
-  const MonthPixelGrid({super.key, required this.habit, required this.year, required this.onTapDay});
+  const MonthPixelGrid({
+    super.key,
+    required this.habit,
+    required this.year,
+    required this.onTapDay,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +50,14 @@ class MonthPixelGrid extends StatelessWidget {
               children: List.generate(12, (m) {
                 return Padding(
                   padding: EdgeInsets.only(right: m == 11 ? 0 : gap),
-                  child: SizedBox(width: cell, child: Text(_monthLetters[m], textAlign: TextAlign.center, style: theme.textTheme.labelSmall)),
+                  child: SizedBox(
+                    width: cell,
+                    child: Text(
+                      _monthLetters[m],
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.labelSmall,
+                    ),
+                  ),
                 );
               }),
             ),
@@ -54,11 +68,18 @@ class MonthPixelGrid extends StatelessWidget {
                 children: List.generate(12, (m) {
                   final month = m + 1;
                   final pad = EdgeInsets.only(right: m == 11 ? 0 : gap);
-                  if (!_dayExists(year, month, day)) return Padding(padding: pad, child: SizedBox(width: cell, height: cell));
-                  
+                  if (!_dayExists(year, month, day)) {
+                    return Padding(
+                      padding: pad,
+                      child: SizedBox(width: cell, height: cell),
+                    );
+                  }
+
                   final date = DateTime(year, month, day);
-                  final isToday = date.year == today.year && date.month == today.month && date.day == today.day;
-                  
+                  final isToday = date.year == today.year &&
+                      date.month == today.month &&
+                      date.day == today.day;
+
                   return Padding(
                     padding: pad,
                     child: GestureDetector(
@@ -70,7 +91,12 @@ class MonthPixelGrid extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: pixelColor(habit, habit.levelOn(date), theme),
                           borderRadius: BorderRadius.circular(2.5),
-                          border: isToday ? Border.all(color: theme.colorScheme.onSurface, width: 1.5) : null,
+                          border: isToday
+                              ? Border.all(
+                                  color: theme.colorScheme.onSurface,
+                                  width: 1.5,
+                                )
+                              : null,
                         ),
                       ),
                     ),
@@ -94,26 +120,37 @@ class CalendarMonthView extends StatelessWidget {
   final int month;
   final void Function(DateTime) onTapDay;
 
-  const CalendarMonthView({super.key, required this.habit, required this.year, required this.month, required this.onTapDay});
+  const CalendarMonthView({
+    super.key,
+    required this.habit,
+    required this.year,
+    required this.month,
+    required this.onTapDay,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final firstDay = DateTime(year, month, 1);
     final daysInMonth = DateTime(year, month + 1, 0).day;
-    final startWeekday = firstDay.weekday % 7; // 0 = Sunday, 1 = Monday...
-    
-    // Weekday headers
-    final weekdays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-    final adjustedStart = firstDay.weekday - 1; // 0 = Monday, 6 = Sunday
+    final adjustedStart = firstDay.weekday - 1; // 0 = Monday
+
+    const weekdays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('${_monthNames[month - 1]} $year', style: theme.textTheme.titleMedium),
+        Text('${_monthNames[month - 1]} $year',
+            style: theme.textTheme.titleMedium),
         const SizedBox(height: 8),
         Row(
-          children: weekdays.map((d) => Expanded(child: Center(child: Text(d, style: theme.textTheme.labelSmall)))).toList(),
+          children: weekdays
+              .map((d) => Expanded(
+                    child: Center(
+                      child: Text(d, style: theme.textTheme.labelSmall),
+                    ),
+                  ))
+              .toList(),
         ),
         const SizedBox(height: 4),
         GridView.builder(
@@ -130,7 +167,7 @@ class CalendarMonthView extends StatelessWidget {
             final day = index - adjustedStart + 1;
             final date = DateTime(year, month, day);
             final level = habit.levelOn(date);
-            
+
             return GestureDetector(
               onTap: () => onTapDay(date),
               child: Container(
@@ -156,4 +193,76 @@ class CalendarMonthView extends StatelessWidget {
   }
 }
 
-const _monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+// ─────────────────────────────────────────────────────────────
+//  Compact heatmap: 53 columns (weeks) × 7 rows (days)
+//  Used on home screen cards
+// ─────────────────────────────────────────────────────────────
+class WeekStripGrid extends StatelessWidget {
+  final Habit habit;
+  final int year;
+  final double cell;
+  final double gap;
+
+  const WeekStripGrid({
+    super.key,
+    required this.habit,
+    required this.year,
+    this.cell = 5,
+    this.gap = 1.5,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final jan1 = DateTime(year, 1, 1);
+    // Back up to the Sunday on/before Jan 1.
+    final start = DateTime(jan1.year, jan1.month, jan1.day - (jan1.weekday % 7));
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final natural = 53 * cell + 52 * gap;
+        final scale = natural > constraints.maxWidth
+            ? constraints.maxWidth / natural
+            : 1.0;
+        final c = cell * scale;
+        final g = gap * scale;
+
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(53, (w) {
+            return Padding(
+              padding: EdgeInsets.only(right: w == 52 ? 0 : g),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: List.generate(7, (d) {
+                  final date =
+                      DateTime(start.year, start.month, start.day + w * 7 + d);
+                  final pad = EdgeInsets.only(bottom: d == 6 ? 0 : g);
+
+                  if (date.year != year) {
+                    return Padding(
+                      padding: pad,
+                      child: SizedBox(width: c, height: c),
+                    );
+                  }
+
+                  return Padding(
+                    padding: pad,
+                    child: Container(
+                      width: c,
+                      height: c,
+                      decoration: BoxDecoration(
+                        color: pixelColor(habit, habit.levelOn(date), theme),
+                        borderRadius: BorderRadius.circular(1),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            );
+          }),
+        );
+      },
+    );
+  }
+}
