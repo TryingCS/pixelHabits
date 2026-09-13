@@ -46,8 +46,28 @@ class Habit {
     } else {
       entries[k] = level;
     }
+
   }
 
+/// Wipes all pixel history, keeping the habit and its levels intact.
+void clearAllEntries() {
+  entries.clear();
+}
+
+/// Removes a level by its 0-based index, and rewrites existing entries
+/// so they still point at the correct level after the shift.
+void removeLevelAt(int index) {
+  if (levels.length <= 1) return; // Always keep at least one level.
+  final deletedLevelNum = index + 1;
+
+  // Drop entries that pointed at the deleted level.
+  entries.removeWhere((_, v) => v == deletedLevelNum);
+
+  // Shift down any entries above the deleted level.
+  entries.updateAll((_, v) => v > deletedLevelNum ? v - 1 : v);
+
+  levels.removeAt(index);
+}
   // ---------- stats ----------
   int doneCount(int year) {
     final prefix = '$year-';
