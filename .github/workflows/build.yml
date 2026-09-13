@@ -49,7 +49,7 @@ jobs:
       - name: Deploy to Surge
         uses: dswistowski/surge-sh-action@v1
         with:
-          domain: 'pixel-habits-yourname.surge.sh'   # ← pick any unique name
+          domain: 'pixel-habits.surge.sh'   # ← pick any unique name
           project: './build/web'
           login: ${{ secrets.SURGE_LOGIN }}
           token: ${{ secrets.SURGE_TOKEN }}
