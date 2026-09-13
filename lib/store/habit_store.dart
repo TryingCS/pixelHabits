@@ -51,6 +51,21 @@ class HabitStore extends ChangeNotifier {
     _persist();
     notifyListeners();
   }
+void clearHabitData(String id) {
+  final i = habits.indexWhere((h) => h.id == id);
+  if (i == -1) return;
+  habits[i].clearAllEntries();
+  _persist();
+  notifyListeners();
+}
+
+void removeHabitLevel(String id, int index) {
+  final i = habits.indexWhere((h) => h.id == id);
+  if (i == -1) return;
+  habits[i].removeLevelAt(index);
+  _persist();
+  notifyListeners();
+}
 
   void toggleDay(Habit h, DateTime d) {
     h.cycleLevel(d);
