@@ -23,16 +23,14 @@ class MonthPixelGrid extends StatelessWidget {
   final Habit habit;
   final int year;
   final void Function(DateTime) onTapDay;
-final void Function(DateTime)? onLongPressDay;  
-
+  final void Function(DateTime)? onLongPressDay;
 
   const MonthPixelGrid({
     super.key,
     required this.habit,
     required this.year,
     required this.onTapDay,
-     this.onLongPressDay,
-
+    this.onLongPressDay,
   });
 
   @override
@@ -90,8 +88,8 @@ final void Function(DateTime)? onLongPressDay;
                       behavior: HitTestBehavior.opaque,
                       onTap: () => onTapDay(date),
                       onLongPress: onLongPressDay == null
-                     ? null
-                     : () => onLongPressDay!(date),
+                          ? null
+                          : () => onLongPressDay!(date),
                       child: Container(
                         width: cell,
                         height: cell,
@@ -119,13 +117,14 @@ final void Function(DateTime)? onLongPressDay;
 }
 
 // ─────────────────────────────────────────────────────────────
-//  NEW: Month Calendar View (M T W T F S S)
+//  Month Calendar View (M T W T F S S)
 // ─────────────────────────────────────────────────────────────
 class CalendarMonthView extends StatelessWidget {
   final Habit habit;
   final int year;
   final int month;
   final void Function(DateTime) onTapDay;
+  final void Function(DateTime)? onLongPressDay;
 
   const CalendarMonthView({
     super.key,
@@ -133,7 +132,7 @@ class CalendarMonthView extends StatelessWidget {
     required this.year,
     required this.month,
     required this.onTapDay,
-    final void Function(DateTime)? onLongPressDay
+    this.onLongPressDay,
   });
 
   @override
@@ -176,7 +175,7 @@ class CalendarMonthView extends StatelessWidget {
             final date = DateTime(year, month, day);
             final level = habit.levelOn(date);
 
-                        return GestureDetector(
+            return GestureDetector(
               onTap: () => onTapDay(date),
               onLongPress: onLongPressDay == null
                   ? null
@@ -190,7 +189,9 @@ class CalendarMonthView extends StatelessWidget {
                   child: Text(
                     '$day',
                     style: TextStyle(
-                      color: level > 0 ? Colors.white : theme.colorScheme.onSurface,
+                      color: level > 0
+                          ? Colors.white
+                          : theme.colorScheme.onSurface,
                       fontSize: 12,
                     ),
                   ),
@@ -206,7 +207,7 @@ class CalendarMonthView extends StatelessWidget {
 
 // ─────────────────────────────────────────────────────────────
 //  Compact heatmap: 53 columns (weeks) × 7 rows (days)
-//  Used on home screen cards
+//  Used on home screen cards (read-only, no taps).
 // ─────────────────────────────────────────────────────────────
 class WeekStripGrid extends StatelessWidget {
   final Habit habit;
@@ -226,7 +227,6 @@ class WeekStripGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final jan1 = DateTime(year, 1, 1);
-    // Back up to the Sunday on/before Jan 1.
     final start = DateTime(jan1.year, jan1.month, jan1.day - (jan1.weekday % 7));
 
     return LayoutBuilder(
