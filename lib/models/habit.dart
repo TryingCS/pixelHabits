@@ -48,6 +48,41 @@ class Habit {
     }
 
   }
+      /// Returns a new entries map with every level renumbered so that
+  /// a reorder from [oldIndex] to [newIndex] keeps pixels correct.
+  /// Both indices are 0-based positions in the levels list.
+  Map<String, int> remappedForReorder(int oldIndex, int newIndex) {
+    final n = levels.length;
+    final Map<int, int> mapping = {};
+    for (int i = 0; i < n; i++) {
+      int newPos;
+      if (i == oldIndex) {
+        newPos = newIndex;
+      } else if (oldIndex < i && i <= newIndex) {
+        newPos = i - 1;
+      } else if (newIndex <= i && i < oldIndex) {
+        newPos = i + 1;
+      } else {
+        newPos = i;
+      }
+      mapping[i + 1] = newPos + 1; // 1-based
+    }
+    final out = <String, int>{};
+    entries.forEach((k, v) => out[k] = mapping[v] ?? v);
+    return out;
+  }
+
+  /// Returns a new entries map with the level at [index] removed and
+  /// anything above it shifted down by one.
+  Map<String, int> remappedForDelete(int index) {
+    final deleted = index + 1;
+    final out = <String, int>{};
+    entries.forEach((k, v) {
+      if (v == deleted) return; // drop
+      out[k] = v > deleted ? v - 1 : v;
+    });
+    return out;
+  }
 
 /// Wipes all pixel history, keeping the habit and its levels intact.
 void clearAllEntries() {
