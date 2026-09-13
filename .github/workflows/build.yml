@@ -1,4 +1,4 @@
-name: Build APK
+name: Build APK & Deploy Web
 
 on:
   push:
@@ -24,12 +24,14 @@ jobs:
           channel: 'stable'
           cache: true
 
+      # Scaffold BOTH android and web folders
       - name: Scaffold platform folders
-        run: flutter create --org com.example --platforms=android --project-name pixel_habits .
+        run: flutter create --org com.example --platforms=android,web --project-name pixel_habits .
 
       - name: Install dependencies
         run: flutter pub get
 
+      # ── 1. Build the Android APK ─────────────────────────────────
       - name: Build release APK
         run: flutter build apk --release
 
@@ -38,3 +40,16 @@ jobs:
         with:
           name: release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+
+      # ── 2. Build the Web App ─────────────────────────────────────
+      - name: Build web
+        run: flutter build web --release
+
+      # ── 3. Deploy to Surge ───────────────────────────────────────
+      - name: Deploy to Surge
+        uses: dswistowski/surge-sh-action@v1
+        with:
+          domain: 'pixel-habits-yourname.surge.sh'   # ← pick any unique name
+          project: './build/web'
+          login: ${{ secrets.SURGE_LOGIN }}
+          token: ${{ secrets.SURGE_TOKEN }}
