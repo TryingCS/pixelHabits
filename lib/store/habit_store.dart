@@ -38,37 +38,39 @@ class HabitStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  void updateHabit(String id, {String? name, List<LevelConfig>? levels}) {
+    void updateHabit(
+    String id, {
+    String? name,
+    List<LevelConfig>? levels,
+    Map<String, int>? entries,
+  }) {
     final i = habits.indexWhere((h) => h.id == id);
     if (i == -1) return;
-    habits[i] = habits[i].copyWith(name: name, levels: levels);
+    final old = habits[i];
+    habits[i] = Habit(
+      id: old.id,
+      name: name ?? old.name,
+      levels: levels ?? old.levels,
+      entries: entries ?? old.entries,
+    );
     _persist();
     notifyListeners();
-}
+  }
 
   void deleteHabit(String id) {
     habits.removeWhere((h) => h.id == id);
     _persist();
     notifyListeners();
   }
-void clearHabitData(String id) {
-  final i = habits.indexWhere((h) => h.id == id);
-  if (i == -1) return;
-  habits[i].clearAllEntries();
-  _persist();
-  notifyListeners();
-}
 
-void removeHabitLevel(String id, int index) {
-  final i = habits.indexWhere((h) => h.id == id);
-  if (i == -1) return;
-  habits[i].removeLevelAt(index);
-  _persist();
-  notifyListeners();
-}
 
   void toggleDay(Habit h, DateTime d) {
     h.cycleLevel(d);
+    _persist();
+    notifyListeners();
+  }
+    void setDay(Habit h, DateTime d, int level) {
+    h.setLevel(d, level);
     _persist();
     notifyListeners();
   }
