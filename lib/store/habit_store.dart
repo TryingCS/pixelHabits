@@ -38,15 +38,13 @@ class HabitStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  void updateHabit(String id,
-      {String? name, int? colorValue, int? maxLevel}) {
+  void updateHabit(String id, {String? name, List<LevelConfig>? levels}) {
     final i = habits.indexWhere((h) => h.id == id);
     if (i == -1) return;
-    habits[i] = habits[i]
-        .copyWith(name: name, colorValue: colorValue, maxLevel: maxLevel);
+    habits[i] = habits[i].copyWith(name: name, levels: levels);
     _persist();
     notifyListeners();
-  }
+}
 
   void deleteHabit(String id) {
     habits.removeWhere((h) => h.id == id);
