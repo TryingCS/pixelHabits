@@ -18,8 +18,14 @@ class HomeScreen extends StatelessWidget {
           appBar: AppBar(title: const Text('Pixel Habits')),
           body: habits.isEmpty
               ? const _EmptyState()
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+              : GridView.builder(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2, // Two habits side-by-side
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
+                    childAspectRatio: 0.85, // Adjust this to make cards taller/shorter
+                  ),
                   itemCount: habits.length,
                   itemBuilder: (_, i) => _HabitCard(habit: habits[i]),
                 ),
@@ -49,9 +55,14 @@ class _HabitCard extends StatelessWidget {
         DateTime(year, 12, 31).difference(DateTime(year, 1, 1)).inDays + 1;
     final pct = (done / daysInYear * 100).round();
     final streak = habit.currentStreak();
+    
+    // Use the first level's color as the accent color for the card
+    final accentColor = habit.levels.isNotEmpty 
+        ? Color(habit.levels.first.colorValue) 
+        : theme.colorScheme.primary;
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: EdgeInsets.zero, // Grid handles the spacing
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => Navigator.of(context).push(
@@ -60,51 +71,59 @@ class _HabitCard extends StatelessWidget {
           ),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Header (Color dot + Title)
               Row(
                 children: [
                   Container(
-                    width: 14,
-                    height: 14,
+                    width: 12,
+                    height: 12,
                     decoration: BoxDecoration(
-                      color: habit.color,
+                      color: accentColor,
                       shape: BoxShape.circle,
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       habit.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium
+                      style: theme.textTheme.titleSmall
                           ?.copyWith(fontWeight: FontWeight.w600),
                     ),
                   ),
-                  Text(
-                    '$pct%',
-                    style: theme.textTheme.labelLarge
-                        ?.copyWith(color: theme.colorScheme.primary),
-                  ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const Spacer(),
+              
+              // The mini heatmap
+              // WeekStripGrid automatically scales to fit the available width
               WeekStripGrid(habit: habit, year: year),
-              const SizedBox(height: 12),
+              
+              const Spacer(),
+              
+              // Footer (Streak + Percentage)
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Icon(Icons.local_fire_department, size: 16, color: habit.color),
-                  const SizedBox(width: 4),
-                  Text('$streak day streak', style: theme.textTheme.bodySmall),
-                  const SizedBox(width: 16),
-                  Icon(Icons.check_circle_outline,
-                      size: 16, color: theme.colorScheme.outline),
-                  const SizedBox(width: 4),
-                  Text('$done / $daysInYear days',
-                      style: theme.textTheme.bodySmall),
+                  Row(
+                    children: [
+                      Icon(Icons.local_fire_department, size: 14, color: accentColor),
+                      const SizedBox(width: 2),
+                      Text('$streak', style: theme.textTheme.labelSmall),
+                    ],
+                  ),
+                  Text(
+                    '$pct%',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ],
               ),
             ],
