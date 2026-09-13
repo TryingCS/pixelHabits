@@ -23,12 +23,16 @@ class MonthPixelGrid extends StatelessWidget {
   final Habit habit;
   final int year;
   final void Function(DateTime) onTapDay;
+final void Function(DateTime)? onLongPressDay;  
+
 
   const MonthPixelGrid({
     super.key,
     required this.habit,
     required this.year,
     required this.onTapDay,
+     this.onLongPressDay,
+
   });
 
   @override
@@ -85,6 +89,9 @@ class MonthPixelGrid extends StatelessWidget {
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onTap: () => onTapDay(date),
+                      onLongPress: onLongPressDay == null
+                     ? null
+                     : () => onLongPressDay!(date),
                       child: Container(
                         width: cell,
                         height: cell,
@@ -126,6 +133,7 @@ class CalendarMonthView extends StatelessWidget {
     required this.year,
     required this.month,
     required this.onTapDay,
+    final void Function(DateTime)? onLongPressDay
   });
 
   @override
@@ -168,8 +176,11 @@ class CalendarMonthView extends StatelessWidget {
             final date = DateTime(year, month, day);
             final level = habit.levelOn(date);
 
-            return GestureDetector(
+                        return GestureDetector(
               onTap: () => onTapDay(date),
+              onLongPress: onLongPressDay == null
+                  ? null
+                  : () => onLongPressDay!(date),
               child: Container(
                 decoration: BoxDecoration(
                   color: pixelColor(habit, level, theme),
