@@ -5,28 +5,37 @@ String dateKey(DateTime d) =>
     '${d.month.toString().padLeft(2, '0')}-'
     '${d.day.toString().padLeft(2, '0')}';
 
+class LevelConfig {
+  String label;
+  int colorValue;
+
+  LevelConfig({required this.label, required this.colorValue});
+
+  Map<String, dynamic> toJson() => {'label': label, 'color': colorValue};
+  factory LevelConfig.fromJson(Map<String, dynamic> j) => LevelConfig(
+        label: j['label'] as String,
+        colorValue: (j['color'] as num).toInt(),
+      );
+}
+
 class Habit {
   final String id;
   String name;
-  int colorValue;
-  int maxLevel; // 1 = simple done/not-done; 2..5 = intensity levels
-  final Map<String, int> entries; // 'yyyy-MM-dd' -> level
+  final Map<String, int> entries; // 'yyyy-MM-dd' -> level index (1-based)
+  List<LevelConfig> levels; 
 
   Habit({
     required this.id,
     required this.name,
-    required this.colorValue,
-    this.maxLevel = 1,
+    required this.levels,
     Map<String, int>? entries,
   }) : entries = entries ?? <String, int>{};
 
-  Color get color => Color(colorValue);
-
   int levelOn(DateTime d) => entries[dateKey(d)] ?? 0;
 
-  /// 0 -> 1 -> ... -> maxLevel -> 0
   void cycleLevel(DateTime d) {
-    final next = levelOn(d) >= maxLevel ? 0 : levelOn(d) + 1;
+    final current = levelOn(d);
+    final next = current >= levels.length ? 0 : current + 1;
     setLevel(d, next);
   }
 
@@ -35,17 +44,14 @@ class Habit {
     if (level <= 0) {
       entries.remove(k);
     } else {
-      entries[k] = level > maxLevel ? maxLevel : level;
+      entries[k] = level;
     }
   }
 
   // ---------- stats ----------
-
   int doneCount(int year) {
     final prefix = '$year-';
-    return entries.entries
-        .where((e) => e.key.startsWith(prefix) && e.value > 0)
-        .length;
+    return entries.entries.where((e) => e.key.startsWith(prefix) && e.value > 0).length;
   }
 
   int currentStreak() {
@@ -59,42 +65,26 @@ class Habit {
     return n;
   }
 
-  int longestStreak(int year) {
-    final days =
-        DateTime(year, 12, 31).difference(DateTime(year, 1, 1)).inDays + 1;
-    var best = 0, cur = 0;
-    for (var i = 0; i < days; i++) {
-      if (levelOn(DateTime(year, 1, 1 + i)) > 0) {
-        cur++;
-        if (cur > best) best = cur;
-      } else {
-        cur = 0;
-      }
-    }
-    return best;
-  }
-
-  Habit copyWith({String? name, int? colorValue, int? maxLevel}) => Habit(
+  Habit copyWith({String? name, List<LevelConfig>? levels}) => Habit(
         id: id,
         name: name ?? this.name,
-        colorValue: colorValue ?? this.colorValue,
-        maxLevel: maxLevel ?? this.maxLevel,
-        entries: entries, // shared reference: history is preserved
+        levels: levels ?? this.levels,
+        entries: entries,
       );
 
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
-        'color': colorValue,
-        'maxLevel': maxLevel,
+        'levels': levels.map((l) => l.toJson()).toList(),
         'entries': entries,
       };
 
   factory Habit.fromJson(Map<String, dynamic> j) => Habit(
         id: j['id'] as String,
         name: (j['name'] ?? '') as String,
-        colorValue: (j['color'] as num).toInt(),
-        maxLevel: (j['maxLevel'] as num?)?.toInt() ?? 1,
+        levels: (j['levels'] as List)
+            .map((e) => LevelConfig.fromJson(e as Map<String, dynamic>))
+            .toList(),
         entries: (j['entries'] as Map?)
                 ?.map((k, v) => MapEntry(k as String, (v as num).toInt())) ??
             <String, int>{},
