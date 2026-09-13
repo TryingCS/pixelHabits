@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart'; // Add this
 import '../models/habit.dart';
 import '../store/habit_store.dart';
 import '../widgets/pixel_grids.dart';
@@ -14,24 +15,26 @@ class HabitDetailScreen extends StatefulWidget {
 
 class _HabitDetailScreenState extends State<HabitDetailScreen> {
   int _year = DateTime.now().year;
+  int _month = DateTime.now().month;
+  bool _isYearView = true; // Toggle between Year and Month
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: habitStore,
       builder: (context, _) {
-        final matches =
-            habitStore.habits.where((h) => h.id == widget.habitId).toList();
-        if (matches.isEmpty) {
-          return const Scaffold(body: Center(child: Text('Habit deleted')));
-        }
+        final matches = habitStore.habits.where((h) => h.id == widget.habitId).toList();
+        if (matches.isEmpty) return const Scaffold(body: Center(child: Text('Habit deleted')));
         final habit = matches.first;
         final theme = Theme.of(context);
 
-        final daysInYear =
-            DateTime(_year, 12, 31).difference(DateTime(_year, 1, 1)).inDays + 1;
-        final done = habit.doneCount(_year);
-        final pct = (done / daysInYear * 100).round();
+        // Calculate stats
+        final Map<int, int> levelCounts = {};
+        for (var entry in habit.entries.entries) {
+          if (entry.key.startsWith('$_year-')) {
+            levelCounts[entry.value] = (levelCounts[entry.value] ?? 0) + 1;
+          }
+        }
 
         return Scaffold(
           appBar: AppBar(
@@ -39,80 +42,90 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
             actions: [
               IconButton(
                 icon: const Icon(Icons.edit_outlined),
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => EditHabitScreen(habitId: habit.id),
-                  ),
-                ),
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => EditHabitScreen(habitId: habit.id))),
               ),
             ],
           ),
           body: ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
             children: [
+              // Year/Month Toggle
+              Center(
+                child: SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment(value: true, label: Text('Year')),
+                    ButtonSegment(value: false, label: Text('Month')),
+                  ],
+                  selected: {_isYearView},
+                  onSelectionChanged: (s) => setState(() => _isYearView = s.first),
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              // Navigation
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  IconButton(
-                    onPressed: () => setState(() => _year--),
-                    icon: const Icon(Icons.chevron_left),
-                  ),
-                  Text('$_year', style: theme.textTheme.titleLarge),
-                  IconButton(
-                    onPressed: () => setState(() => _year++),
-                    icon: const Icon(Icons.chevron_right),
-                  ),
+                  IconButton(onPressed: () => setState(() { if (_isYearView) _year--; else _month--; if (_month < 1) { _month = 12; _year--; } }), icon: const Icon(Icons.chevron_left)),
+                  Text(_isYearView ? '$_year' : '${_monthNames[_month - 1]} $_year', style: theme.textTheme.titleLarge),
+                  IconButton(onPressed: () => setState(() { if (_isYearView) _year++; else _month++; if (_month > 12) { _month = 1; _year++; } }), icon: const Icon(Icons.chevron_right)),
                 ],
               ),
               const SizedBox(height: 8),
+
+              // Grid
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(12),
-                  child: MonthPixelGrid(
-                    habit: habit,
-                    year: _year,
-                    onTapDay: (d) => habitStore.toggleDay(habit, d),
+                  child: _isYearView
+                      ? MonthPixelGrid(habit: habit, year: _year, onTapDay: (d) => habitStore.toggleDay(habit, d))
+                      : CalendarMonthView(habit: habit, year: _year, month: _month, onTapDay: (d) => habitStore.toggleDay(habit, d)),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Legend
+              Wrap(
+                spacing: 16,
+                runSpacing: 8,
+                children: habit.levels.asMap().entries.map((entry) {
+                  final i = entry.key;
+                  final level = entry.value;
+                  return Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(width: 14, height: 14, decoration: BoxDecoration(color: Color(level.colorValue), borderRadius: BorderRadius.circular(3))),
+                      const SizedBox(width: 6),
+                      Text(level.label, style: theme.textTheme.bodySmall),
+                    ],
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 24),
+
+              // Stats
+              Text('Year Overview', style: theme.textTheme.titleMedium),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 200,
+                child: PieChart(
+                  PieChartData(
+                    sectionsSpace: 2,
+                    centerSpaceRadius: 40,
+                    sections: habit.levels.asMap().entries.map((entry) {
+                      final i = entry.key + 1; // level index
+                      final count = levelCounts[i] ?? 0;
+                      if (count == 0) return null;
+                      return PieChartSectionData(
+                        color: Color(entry.value.colorValue),
+                        value: count.toDouble(),
+                        title: '$count',
+                        radius: 50,
+                        titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                      );
+                    }).whereType<PieChartSectionData>().toList(),
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  _Stat(label: 'Streak', value: '${habit.currentStreak()}'),
-                  _Stat(label: 'Best', value: '${habit.longestStreak(_year)}'),
-                  _Stat(label: 'Done', value: '$done'),
-                  _Stat(label: 'Rate', value: '$pct%'),
-                ],
-              ),
-              const SizedBox(height: 20),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('Less', style: theme.textTheme.labelSmall),
-                    const SizedBox(width: 6),
-                    for (int l = 0; l <= habit.maxLevel; l++) ...[
-                      Container(
-                        width: 14,
-                        height: 14,
-                        decoration: BoxDecoration(
-                          color: pixelColor(habit, l, theme),
-                          borderRadius: BorderRadius.circular(3),
-                        ),
-                      ),
-                      const SizedBox(width: 3),
-                    ],
-                    Text('More', style: theme.textTheme.labelSmall),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Tap any square to cycle its level. Add as many habits as '
-                'you like — nothing is capped.',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.outline),
               ),
             ],
           ),
@@ -122,25 +135,4 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
   }
 }
 
-class _Stat extends StatelessWidget {
-  final String label;
-  final String value;
-  const _Stat({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Expanded(
-      child: Column(
-        children: [
-          Text(
-            value,
-            style: theme.textTheme.titleLarge
-                ?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          Text(label, style: theme.textTheme.labelSmall),
-        ],
-      ),
-    );
-  }
-}
+const _monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
