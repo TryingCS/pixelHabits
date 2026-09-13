@@ -14,6 +14,7 @@ class EditHabitScreen extends StatefulWidget {
 class _EditHabitScreenState extends State<EditHabitScreen> {
   late final TextEditingController _name;
   late List<LevelConfig> _levels;
+  late Map<String, int> _entries;
 
   bool get _isEditing => widget.habitId != null;
 
@@ -23,12 +24,12 @@ class _EditHabitScreenState extends State<EditHabitScreen> {
     if (_isEditing) {
       final h = habitStore.habits.firstWhere((x) => x.id == widget.habitId);
       _name = TextEditingController(text: h.name);
-      _levels = List.from(h.levels); // local copy while editing
+      _levels = List.from(h.levels);
+      _entries = Map.from(h.entries);
     } else {
       _name = TextEditingController();
-      _levels = [
-        LevelConfig(label: 'Done', colorValue: 0xFF43A047),
-      ];
+      _levels = [LevelConfig(label: 'Done', colorValue: 0xFF43A047)];
+      _entries = <String, int>{};
     }
   }
 
@@ -43,7 +44,12 @@ class _EditHabitScreenState extends State<EditHabitScreen> {
     if (name.isEmpty) return;
 
     if (_isEditing) {
-      habitStore.updateHabit(widget.habitId!, name: name, levels: _levels);
+      habitStore.updateHabit(
+        widget.habitId!,
+        name: name,
+        levels: _levels,
+        entries: _entries,
+      );
     } else {
       habitStore.addHabit(Habit(
         id: DateTime.now().microsecondsSinceEpoch.toString(),
@@ -68,15 +74,9 @@ class _EditHabitScreenState extends State<EditHabitScreen> {
       context: context,
       builder: (ctx) => _LevelEditorDialog(level: _levels[index]),
     );
-    if (result != null) {
-      setState(() {
-        _levels[index] = result;
-      });
-    }
+    if (result != null) setState(() => _levels[index] = result);
   }
 
-  /// Removes a level, and — if we're editing an existing habit — also
-  /// remaps that habit's entries so its history stays consistent.
   Future<void> _deleteLevel(int index) async {
     if (_levels.length <= 1) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -86,13 +86,17 @@ class _EditHabitScreenState extends State<EditHabitScreen> {
     }
 
     final level = _levels[index];
+    final affected = _entries.values.where((v) => v == index + 1).length;
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('Delete "${level.label}"?'),
-        content: const Text(
-          'Any days you logged at this level will be cleared. '
-          'Levels above it will shift down. This cannot be undone.',
+        content: Text(
+          affected == 0
+              ? 'Levels above it will shift down.'
+              : '$affected logged ${affected == 1 ? "day" : "days"} will be '
+                  'cleared, and levels above it will shift down.',
         ),
         actions: [
           TextButton(
@@ -108,12 +112,34 @@ class _EditHabitScreenState extends State<EditHabitScreen> {
     );
     if (ok != true) return;
 
-    if (_isEditing) {
-      // Persist immediately so entries get remapped correctly.
-      habitStore.removeHabitLevel(widget.habitId!, index);
-    }
+    // Build a throwaway Habit so we can reuse its remap helper.
+    final temp = Habit(
+      id: '_',
+      name: '_',
+      levels: _levels,
+      entries: _entries,
+    );
     setState(() {
+      _entries = temp.remappedForDelete(index);
       _levels.removeAt(index);
+    });
+  }
+
+  void _reorderLevel(int oldIndex, int newIndex) {
+    // ReorderableListView convention: newIndex is "before removal".
+    if (newIndex > oldIndex) newIndex -= 1;
+    if (oldIndex == newIndex) return;
+
+    final temp = Habit(
+      id: '_',
+      name: '_',
+      levels: _levels,
+      entries: _entries,
+    );
+    setState(() {
+      _entries = temp.remappedForReorder(oldIndex, newIndex);
+      final moved = _levels.removeAt(oldIndex);
+      _levels.insert(newIndex, moved);
     });
   }
 
@@ -139,11 +165,10 @@ class _EditHabitScreenState extends State<EditHabitScreen> {
       ),
     );
     if (ok != true) return;
-
-    habitStore.clearHabitData(widget.habitId!);
+    setState(() => _entries = <String, int>{});
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('History cleared.')),
+        const SnackBar(content: Text('History cleared. Tap Save to commit.')),
       );
     }
   }
@@ -168,7 +193,6 @@ class _EditHabitScreenState extends State<EditHabitScreen> {
       ),
     );
     if (ok != true) return;
-
     habitStore.deleteHabit(widget.habitId!);
     if (mounted) Navigator.of(context).pop();
   }
@@ -180,101 +204,112 @@ class _EditHabitScreenState extends State<EditHabitScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_isEditing ? 'Edit habit' : 'New habit'),
-        actions: [
-          TextButton(onPressed: _save, child: const Text('Save')),
-        ],
+        actions: [TextButton(onPressed: _save, child: const Text('Save'))],
       ),
-      body: ListView(
+      body: ReorderableListView(
         padding: const EdgeInsets.all(20),
-        children: [
-          TextField(
-            controller: _name,
-            autofocus: !_isEditing,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: const InputDecoration(
-              labelText: 'Habit name',
-              hintText: 'e.g. Health Log',
-              border: OutlineInputBorder(),
+        onReorder: _reorderLevel,
+        header: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _name,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Habit name',
+                hintText: 'e.g. Health Log',
+                border: OutlineInputBorder(),
+              ),
             ),
-          ),
-          const SizedBox(height: 28),
-
-          // ── Levels section ────────────────────────────────────────────
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Levels', style: theme.textTheme.titleSmall),
-              TextButton.icon(
-                onPressed: _addLevel,
-                icon: const Icon(Icons.add),
-                label: const Text('Add level'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Each level is a colour + label. Tap a level in the tracker '
-            'to cycle through them.',
-            style: theme.textTheme.bodySmall,
-          ),
-          const SizedBox(height: 12),
-
-          ..._levels.asMap().entries.map((entry) {
-            final i = entry.key;
-            final level = entry.value;
-            return Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
-                leading: Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: Color(level.colorValue),
-                    shape: BoxShape.circle,
-                  ),
+            const SizedBox(height: 28),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Levels', style: theme.textTheme.titleSmall),
+                TextButton.icon(
+                  onPressed: _addLevel,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add level'),
                 ),
-                title: Text(level.label),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit, size: 20),
-                      onPressed: () => _editLevel(i),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, size: 20),
-                      onPressed: () => _deleteLevel(i),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }),
-
-          // ── Danger zone ───────────────────────────────────────────────
-          if (_isEditing) ...[
-            const SizedBox(height: 40),
-            Text('Danger zone',
-                style: theme.textTheme.titleSmall
-                    ?.copyWith(color: theme.colorScheme.error)),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: _clearHistory,
-              icon: const Icon(Icons.cleaning_services_outlined),
-              label: const Text('Clear all pixel history'),
+              ],
             ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: _deleteHabit,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: theme.colorScheme.error,
-                side: BorderSide(color: theme.colorScheme.error),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                'Drag a level to reorder it. Tap a level in the tracker to '
+                'cycle, or long-press to pick directly.',
+                style: theme.textTheme.bodySmall,
               ),
-              icon: const Icon(Icons.delete_forever),
-              label: const Text('Delete this habit'),
             ),
           ],
-        ],
+        ),
+        footer: _isEditing
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 32),
+                  Text('Danger zone',
+                      style: theme.textTheme.titleSmall
+                          ?.copyWith(color: theme.colorScheme.error)),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _clearHistory,
+                    icon: const Icon(Icons.cleaning_services_outlined),
+                    label: const Text('Clear all pixel history'),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: _deleteHabit,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: theme.colorScheme.error,
+                      side: BorderSide(color: theme.colorScheme.error),
+                    ),
+                    icon: const Icon(Icons.delete_forever),
+                    label: const Text('Delete this habit'),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+              )
+            : const SizedBox(height: 24),
+        children: _levels.asMap().entries.map((entry) {
+          final i = entry.key;
+          final level = entry.value;
+          return Card(
+            key: ValueKey(identityHashCode(level)),
+            margin: const EdgeInsets.only(bottom: 8),
+            child: ListTile(
+              leading: Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: Color(level.colorValue),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              title: Text(level.label),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.edit, size: 20),
+                    onPressed: () => _editLevel(i),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, size: 20),
+                    onPressed: () => _deleteLevel(i),
+                  ),
+                  ReorderableDragStartListener(
+                    index: i,
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 4),
+                      child: Icon(Icons.drag_handle, size: 20),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
